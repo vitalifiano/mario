@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #gameContainer {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    #gameTitle {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    #canvasContainer {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      width: 100%;
+    }
+
+    #gameCanvas {
+      border: 1px solid transparent;
+    }
+
+    #buttonContainer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #startBtn,
+    #tryAgainBtn {
+      padding: 10px 20px;
+      font-size: 26px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    .background {
+    background: url(background.jpg) ;
+    background-size:cover;
+    background-position:center;
+  }
+
+  </style>
+</head>
+<body>
+  <div class="background">
+  <div id="gameContainer">
+    <div id="gameTitle">Totally Licensed Images Pre-Alpha</div>
+    <div id="canvasContainer">
+      <canvas id="gameCanvas"></canvas>
+      <div id="buttonContainer">
+        <button id="startBtn">Start Game</button>
+        <button id="tryAgainBtn" style="display: none;">Try Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const spriteSize = 100;
+    const powerUpSize = 75;
+    const bombSize = 75;
+
+    let spriteX;
+    let spriteY;
+    let movementSpeed = 5.5;
+    let spriteExtraSquares = 0;
+
+    let powerUpX = 0;
+    let powerUpY = 0;
+    let powerUpActive = false;
+
+    let obstacleTimer = null;
+    let obstacleX = 0;
+    let obstacleY = 0;
+    let obstacleActive = false;
+
+    let keysPressed = {};
+
+    let score = 0;
+    let highScore = 0;
+    let timeLimit = 60;
+    let timeLeft = timeLimit;
+    let timeInterval = null;
+    let gameOver = false;
+    let gameStarted = false;
+
+    const spriteImage = new Image();
+    spriteImage.src = "idle.png";
+
+    const powerUpImage = new Image();
+    powerUpImage.src = "power.png";
+
+    const obstacleImage = new Image();
+    obstacleImage.src = "bomb.png";
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      spriteX = (canvas.width - spriteSize) / 2;
+      spriteY = (canvas.height - spriteSize) / 2;
+    }
+
+    function drawSprite() {
+      ctx.drawImage(spriteImage, spriteX, spriteY, spriteSize, spriteSize);
+    }
+
+    function drawPowerUp() {
+      ctx.drawImage(powerUpImage, powerUpX, powerUpY, powerUpSize, powerUpSize);
+    }
+
+    function drawObstacle() {
+      ctx.drawImage(obstacleImage, obstacleX, obstacleY, bombSize, bombSize);
+    }
+
+    function spawnPowerUp() {
+  powerUpX = Math.random() * (canvas.width - powerUpSize);
+  powerUpY = Math.random() * (canvas.height - powerUpSize);
+
+ 
+  if (
+    obstacleActive &&
+    powerUpX < obstacleX + bombSize &&
+    powerUpX + powerUpSize > obstacleX &&
+    powerUpY < obstacleY + bombSize &&
+    powerUpY + powerUpSize > obstacleY
+  ) {
+    
+    var distance = 2 * spriteSize; 
+    powerUpX += distance;
+    powerUpY += distance;
+
+
+    if (powerUpX + powerUpSize > canvas.width) {
+      powerUpX = canvas.width - powerUpSize;
+    }
+    if (powerUpY + powerUpSize > canvas.height) {
+      powerUpY = canvas.height - powerUpSize;
+    }
+  }
+
+  powerUpActive = true;
+}
+
+function startObstacleTimer() {
+  obstacleTimer = setInterval(spawnObstacle, getRandomSpawnTime());
+}
+
+function stopObstacleTimer() {
+  clearInterval(obstacleTimer);
+}
+
+function getRandomSpawnTime() {
+  return Math.floor(Math.random() * (1000 - 250 + 1)) + 250; 
+}
+
+function spawnObstacle() {
+  const minDistance = 200; 
+  const powerUpCenterX = powerUpX + powerUpSize / 2;
+  const powerUpCenterY = powerUpY + powerUpSize / 2;
+
+  do {
+    obstacleX = Math.random() * (canvas.width - spriteSize);
+    obstacleY = Math.random() * (canvas.height - spriteSize);
+  } while (
+    Math.abs(obstacleX - powerUpCenterX) < minDistance &&
+    Math.abs(obstacleY - powerUpCenterY) < minDistance
+  );
+
+  obstacleActive = true;
+}
+
+
+    function checkCollision() {
+      if (
+        powerUpActive &&
+        spriteX < powerUpX + powerUpSize &&
+        spriteX + spriteSize + spriteExtraSquares * spriteSize > powerUpX &&
+        spriteY < powerUpY + powerUpSize &&
+        spriteY + spriteSize + spriteExtraSquares * spriteSize > powerUpY
+      ) {
+        powerUpActive = false;
+        if (spriteExtraSquares === 10) {
+          spriteExtraSquares++;
+        }
+        score++;
+      }
+    }
+
+    function checkObstacleCollision() {
+
+  const obstacleHitboxSize = spriteSize * 0.365; 
+
+
+  const obstacleLeft = obstacleX + (spriteSize - obstacleHitboxSize) / 2;
+  const obstacleRight = obstacleLeft + obstacleHitboxSize;
+  const obstacleTop = obstacleY + (spriteSize - obstacleHitboxSize) / 2;
+  const obstacleBottom = obstacleTop + obstacleHitboxSize;
+
+
+  if (
+    spriteX + spriteSize > obstacleLeft &&
+    spriteX < obstacleRight &&
+    spriteY + spriteSize > obstacleTop &&
+    spriteY < obstacleBottom
+  ) {
+    endGame();
+  }
+}
+
+
+    function handleSpriteMovement() {
+  let speedX = 0;
+  let speedY = 0;
+  let isMoving = false;
+
+  if (keysPressed["ArrowUp"]) {
+    speedY = -movementSpeed;
+    spriteImage.src = "mariojump.png";
+    isMoving = true;
+  } else if (keysPressed["ArrowDown"]) {
+    speedY = movementSpeed;
+    isMoving = true;
+  } else if (keysPressed["ArrowLeft"]) {
+    speedX = -movementSpeed;
+    spriteImage.src = "marioleft.png";
+    isMoving = true;
+  } else if (keysPressed["ArrowRight"]) {
+    speedX = movementSpeed;
+    spriteImage.src = "marioright.png";
+    isMoving = true;
+  }
+
+  if (!isMoving) {
+    spriteImage.src = "idle.png";
+  }
+
+
+  if (spriteX + speedX >= 0 && spriteX + spriteSize + speedX <= canvas.width) {
+    spriteX += speedX;
+  }
+  if (spriteY + speedY >= 0 && spriteY + spriteSize + speedY <= canvas.height) {
+    spriteY += speedY;
+  }
+}
+
+
+    function handleInput(event, isPressed) {
+      if (gameOver) {
+        return; 
+      }
+
+      keysPressed[event.key] = isPressed;
+
+      if (!isPressed) {
+        keysPressed[event.key] = false;
+      }
+    }
+
+    function displayScore() {
+  // Background
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(10, 10, 200, 100);
+
+  // Score
+  ctx.fillStyle = "white";
+  ctx.font = "bold 24px Arial";
+  ctx.fillText("Score: " + score, 20, 40);
+
+  // High Score
+  ctx.fillStyle = "white";
+  ctx.font = "bold 18px Arial";
+  ctx.fillText("High Score: " + highScore, 20, 70);
+
+  // Time
+  ctx.fillStyle = "white";
+  ctx.font = "bold 20px Arial";
+  ctx.fillText("Time: " + timeLeft + "s", 20, 100);
+}
+
+
+
+    function updateTime() {
+      timeLeft--;
+      if (timeLeft <= 0) {
+        endGame();
+      }
+    }
+
+    function runGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!gameOver) {
+    drawSprite();
+    if (!powerUpActive) {
+      spawnPowerUp();
+    }
+    if (!obstacleActive) {
+      spawnObstacle();
+    }
+    if (powerUpActive) {
+      drawPowerUp();
+    }
+    if (obstacleActive) {
+      drawObstacle();
+    }
+    checkCollision();
+    checkObstacleCollision();
+    handleSpriteMovement();
+    displayScore();
+
+    requestAnimationFrame(runGame);
+  }
+}
+
+
+    function startGame() {
+
+  spriteX = (canvas.width - spriteSize) / 2;
+  spriteY = (canvas.height - spriteSize) / 2;
+
+
+  spriteExtraSquares = 0;
+  powerUpActive = false;
+  obstacleActive = false;
+  score = 0;
+  timeLeft = timeLimit;
+  movementSpeed = 3.25;
+  gameOver = false;
+
+
+
+  clearInterval(obstacleTimer);
+  startObstacleTimer();
+
+
+  clearInterval(timeInterval);
+  timeInterval = setInterval(updateTime, 1000);
+
+
+  document.getElementById("startBtn").style.display = "none";
+
+  
+  keysPressed = {};
+
+  window.addEventListener("keydown", (event) => handleInput(event, true));
+  window.addEventListener("keyup", (event) => handleInput(event, false));
+
+
+  gameLoop();
+  runGame();
+
+}
+
+
+    function tryAgain() {
+      if (gameOver) {
+        resetGame();
+        document.getElementById("tryAgainBtn").style.display = "none";
+      }
+    }
+
+    function resetGame() {
+  resizeCanvas();
+  clearInterval(obstacleTimer);
+  startObstacleTimer();
+
+  spriteX = (canvas.width - spriteSize) / 2;
+  spriteY = (canvas.height - spriteSize) / 2;
+  spriteExtraSquares = 0;
+  powerUpActive = false;
+  obstacleActive = false;
+  score = 0;
+  timeLeft = timeLimit;
+  gameOver = false;
+  movementSpeed = 10.5;
+
+  clearInterval(timeInterval);
+  timeInterval = setInterval(updateTime, 1000);
+
+  document.getElementById("tryAgainBtn").style.display = "none";
+
+
+  keysPressed = {};
+
+ 
+  window.removeEventListener("keydown", handleInput);
+  window.removeEventListener("keyup", handleInput);
+
+
+  window.addEventListener("keydown", (event) => handleInput(event, true));
+  window.addEventListener("keyup", (event) => handleInput(event, false));
+
+  gameLoop();
+}
+
+
+    function endGame() {
+      clearInterval(timeInterval);
+      document.getElementById("tryAgainBtn").style.display = "block";
+      gameOver = true;
+      stopObstacleTimer();
+
+      if (score > highScore) {
+        highScore = score;
+      }
+
+      alert("Game Over!\nYour Score: " + score);
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!gameOver) {
+        drawSprite();
+        if (!powerUpActive) {
+          spawnPowerUp();
+        }
+        if (!obstacleActive) {
+          spawnObstacle();
+        }
+        if (powerUpActive) {
+          drawPowerUp();
+        }
+        if (obstacleActive) {
+          drawObstacle();
+        }
+        checkCollision();
+        checkObstacleCollision();
+        handleSpriteMovement();
+        displayScore();
+
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    function initializeGame() {
+      resizeCanvas();
+
+      window.addEventListener("keydown", (event) => handleInput(event, true));
+      window.addEventListener("keyup", (event) => handleInput(event, false));
+
+      document.getElementById("startBtn").addEventListener("click", startGame);
+      document.getElementById("tryAgainBtn").addEventListener("click", tryAgain);
+
+      spriteImage.addEventListener("load", () => {
+        powerUpImage.addEventListener("load", () => {
+          obstacleImage.addEventListener("load", () => {
+            gameLoop();
+          });
+        });
+      });
+
+      spriteImage.onerror = () => {
+        alert("Error loading sprite image.");
+      };
+
+      powerUpImage.onerror = () => {
+        alert("Error loading power-up image.");
+      };
+
+      obstacleImage.onerror = () => {
+        alert("Error loading obstacle image.");
+      };
+    }
+
+    initializeGame();
+  </script>
+  </div>
+</body>
+</html>
